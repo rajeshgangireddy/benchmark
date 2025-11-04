@@ -262,10 +262,10 @@ def benchmark(args: argparse.Namespace) -> None:
     benchmarker.logger.info(f"Completed {len(results)}/{args.num_runs} runs successfully.")
 
     timestamp = time.strftime("%Y%m%d-%H%M%S")
-    filename = (f"benchmark_{args.model_name}_"
+    filename = (f"BM_{args.device}_{args.model_name}_"
                 f"{args.category}_"
-                f"runs{args.num_runs}_"
-                f"seed{args.seed}_"
+                f"runs-{args.num_runs}_"
+                f"seed-{args.seed}_"
                 f"{timestamp}.xlsx")
 
     result_excel_file_path = output_dir / filename

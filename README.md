@@ -1,6 +1,6 @@
-# Anomalib Benchmarking Tool
+# Anomalib Benchmarking Tool (WIP) 
 
-Official benchmarking script for Anomalib models across different hardware platforms (CPU, CUDA GPU, Intel XPU).
+Benchmarking script for Anomalib models across different hardware platforms (CPU, CUDA GPU, Intel XPU).
 
 ## Requirements
 

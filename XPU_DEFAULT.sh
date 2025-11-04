@@ -4,7 +4,7 @@
 # Usage: ./run_multiple_models.sh
 
 # Configuration
-DEVICE="cuda"
+DEVICE="xpu"
 CATEGORY="transistor"  # Change this to your desired category
 NUM_RUNS=5
 SEED=42

@@ -1,5 +1,6 @@
 import argparse
 import json
+import statistics
 import sys
 import time
 import traceback
@@ -65,28 +66,35 @@ def main():
 
 def summarise_results(results: list[dict[str, Any]]) -> dict[str, Any]:
     """
-    Summarises the benchmark results by calculating the mean training and testing times,
-    and averaging the metrics across all runs.
+    Summarises the benchmark results by calculating the mean and standard deviation 
+    of training and testing times, and averaging the metrics across all runs.
 
     Args:
         results (list[dict[str, Any]]): List of benchmark results from each run.
 
     Returns:
-        dict[str, Any]: Summarised benchmark results.
+        dict[str, Any]: Summarised benchmark results including means and standard deviations.
     """
     summarised_result = {}
     num_runs = len(results)
-    total_training_time = sum(result["training_time_sec"] for result in results)
-    total_testing_time = sum(result["testing_time_sec"] for result in results)
+    
+    # Training and testing times
+    training_times = [result["training_time_sec"] for result in results]
+    testing_times = [result["testing_time_sec"] for result in results]
+    
+    summarised_result["mean_training_time_sec"] = statistics.mean(training_times)
+    summarised_result["std_training_time_sec"] = statistics.stdev(training_times) if num_runs > 1 else 0.0
+    
+    summarised_result["mean_testing_time_sec"] = statistics.mean(testing_times)
+    summarised_result["std_testing_time_sec"] = statistics.stdev(testing_times) if num_runs > 1 else 0.0
+    
 
-    summarised_result["mean_training_time_sec"] = total_training_time / num_runs
-    summarised_result["mean_testing_time_sec"] = total_testing_time / num_runs
-
-    # Average metrics
+    # Average metrics with standard deviation
     metric_keys = [key for key in results[0].keys() if key not in ("run_id", "seed", "training_time_sec", "testing_time_sec")]
     for key in metric_keys:
-        total_metric = sum(result[key] for result in results)
-        summarised_result[f"mean_{key}"] = total_metric / num_runs
+        metric_values = [result[key] for result in results]
+        summarised_result[f"mean_{key}"] = statistics.mean(metric_values)
+        summarised_result[f"std_{key}"] = statistics.stdev(metric_values) if num_runs > 1 else 0.0
 
     return summarised_result
 

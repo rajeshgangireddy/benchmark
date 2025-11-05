@@ -9,47 +9,22 @@ CATEGORY="transistor"  # Change this to your desired category
 NUM_RUNS=5
 SEED=42
 WAIT_TIME=20
-OUTPUT_DIR="./benchmark_results"
+OUTPUT_DIR="./BenchMark-V2-XPU"
 
 # List of models to benchmark (add/remove models as needed)
 MODELS=(
     "Padim"
-    # "Patchcore"
-    # "Stfpm"
-    # "Fastflow"
-    # "Cflow"
-    # "Dfkde"
+    "Patchcore"
+    "Stfpm"
+    "Dinomaly"
+    "Fastflow"
     "Dfm"
-    # "Draem"
-    # "Dsr"
-    # "Efficient_ad"
     "Fre"
-    # "Ganomaly"
-    # "Reverse_distillation"
-    # "Rkde"
-    # "Uflow"
-    # "Winclip"
+    "Winclip"
+    "Csflow"
+    "ReverseDistillation"
 )
 
-# # List of models to benchmark (add/remove models as needed)
-# MODELS=(
-#     "Padim"
-#     "Patchcore"
-#     "Stfpm"
-#     "Fastflow"
-#     "Cflow"
-#     "Dfkde"
-#     "Dfm"
-#     "Draem"
-#     "Dsr"
-#     "Efficient_ad"
-#     "Fre"
-#     "Ganomaly"
-#     "Reverse_distillation"
-#     "Rkde"
-#     "Uflow"
-#     "Winclip"
-# )
 
 # Function to log messages
 log_message() {
@@ -95,12 +70,7 @@ for MODEL in "${MODELS[@]}"; do
         ((FAILED_RUNS++))
         FAILED_MODELS+=("$MODEL")
     fi
-    
-    # Add a delay between models (optional)
-    if [ "$MODEL" != "${MODELS[-1]}" ]; then
-        log_message "Waiting $WAIT_TIME seconds before next model..."
-        sleep "$WAIT_TIME"
-    fi
+
 done
 
 # Summary

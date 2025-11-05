@@ -4,28 +4,16 @@
 # Usage: ./run_multiple_models.sh
 
 # Configuration
-DEVICE="xpu"
+DEVICE="cuda"
 CATEGORY="transistor"  # Change this to your desired category
 NUM_RUNS=5
 SEED=42
 WAIT_TIME=20
-OUTPUT_DIR="./BenchMark-V2-XPU"
+OUTPUT_DIR="./BenchMark-V2-CUDA"
 
 # List of models to benchmark (add/remove models as needed)
 
 MODELS=(
-    "Padim" # Fastest
-    "Dfm" # Fastest + accuracy
-    "Patchcore" # Most used
-    "Dinomaly" # New SOTA
-    "Fre" # Balanced
-    "Dfkde" # Fastest - only classification
-    "WinClip" # Clip based model
-    "Fastflow" # Good accuracy
-    "VlmAd" # Vision-language model based method
-    "Stfpm"  
-    "EfficientAd" # BatchSize 1 only - this will fail, repeat separately   
-    "Csflow"
     "ReverseDistillation"
     "Cfa"
     "Cflow"
@@ -33,6 +21,7 @@ MODELS=(
     "Dsr"
     "Ganomaly"
     "Supersimplenet"
+    "EfficientAd" # BatchSize 1 only - this will fail, repeat separately
     "Uflow"
     "UniNet"
 )

@@ -4,14 +4,15 @@
 # Usage: ./run_multiple_models.sh
 
 # Configuration
-DEVICE="cuda"
+DEVICE="xpu"
 CATEGORY="transistor"  # Change this to your desired category
 NUM_RUNS=5
 SEED=42
 WAIT_TIME=20
-OUTPUT_DIR="./BenchMark-V2-CUDA"
+OUTPUT_DIR="./BenchMark-V2-XPU"
 
 # List of models to benchmark (add/remove models as needed)
+
 MODELS=(
     "Padim" # Fastest
     "Dfm" # Fastest + accuracy
@@ -22,18 +23,8 @@ MODELS=(
     "WinClip" # Clip based model
     "Fastflow" # Good accuracy
     "VlmAd" # Vision-language model based method
-    "Stfpm"  
-    "EfficientAd" # BatchSize 1 only - this will fail, repeat separately   
+    "Stfpm"     
     "Csflow"
-    "ReverseDistillation"
-    "Cfa"
-    "Cflow"
-    "Draem"
-    "Dsr"
-    "Ganomaly"
-    "Supersimplenet"
-    "Uflow"
-    "UniNet"
 )
 
 
@@ -81,7 +72,7 @@ for MODEL in "${MODELS[@]}"; do
         ((FAILED_RUNS++))
         FAILED_MODELS+=("$MODEL")
     fi
-    
+
 done
 
 # Summary

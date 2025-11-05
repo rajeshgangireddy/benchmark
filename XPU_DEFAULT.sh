@@ -12,17 +12,29 @@ WAIT_TIME=20
 OUTPUT_DIR="./BenchMark-V2-XPU"
 
 # List of models to benchmark (add/remove models as needed)
+
 MODELS=(
-    "Padim"
-    "Patchcore"
-    "Stfpm"
-    "Dinomaly"
-    "Fastflow"
-    "Dfm"
-    "Fre"
-    "Winclip"
+    "Padim" # Fastest
+    "Dfm" # Fastest + accuracy
+    "Patchcore" # Most used
+    "Dinomaly" # New SOTA
+    "Fre" # Balanced
+    "Dfkde" # Fastest - only classification
+    "WinClip" # Clip based model
+    "Fastflow" # Good accuracy
+    "VlmAd" # Vision-language model based method
+    "Stfpm"  
+    "EfficientAd" # BatchSize 1 only - this will fail, repeat separately   
     "Csflow"
     "ReverseDistillation"
+    "Cfa"
+    "Cflow"
+    "Draem"
+    "Dsr"
+    "Ganomaly"
+    "Supersimplenet"
+    "Uflow"
+    "UniNet"
 )
 
 

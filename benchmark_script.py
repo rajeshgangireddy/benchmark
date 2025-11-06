@@ -12,7 +12,7 @@ import pandas as pd
 from benchmarker import AnomalibBenchmark
 from utils.system_info import get_system_info
 
-
+# Expected Versions
 TORCH_VERSION = "2.9"
 PYTHON_VERSION = "3.12.13"
 ANOMALIB_VERSION = "2.2.0"
@@ -40,9 +40,8 @@ def main():
 
     parser.add_argument("--max_epochs", type=int, default=20, 
                         help="Maximum number of epochs for training for models that support. Default is 20.")
-    parser.add_argument("--save_checkpoint_during_training", action="store_true",
-                        help="Flag to save model checkpoint after each epoch during training. "
-                             "Note that this can slow down the training as saving large checkpoint files is dependent on the disk storage speeds and not the device (GPU,XPU) used for training.")
+    parser.add_argument("--barebones", action="store_true",
+                        help="Flag to enable barebones mode which disables logging, progress bars, and checkpointing for minimal overhead during benchmarking.")
 
     # Engine, Data, Model Related Arguments
     parser.add_argument("--train_batch_size", type=int, default=32,

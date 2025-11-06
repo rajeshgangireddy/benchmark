@@ -23,9 +23,6 @@ from anomalib.callbacks import ModelCheckpoint
 from utils.dataset import MVTEC_CATEGORIES
 
 # Constants
-MS_TO_SEC_CONVERSION = 1000.0
-
-
 class AnomalibBenchmark():
     """
     Benchmarking class for Anomalib models.
@@ -47,7 +44,6 @@ class AnomalibBenchmark():
             level=logging.INFO,
             format="%(asctime)s - %(levelname)s - %(message)s",
             handlers=[
-                logging.FileHandler("benchmark.log"),
                 logging.StreamHandler(),
             ],
         )
@@ -61,39 +57,48 @@ class AnomalibBenchmark():
         Returns:
             Engine: Configured engine instance.
         """
-
         max_epochs = self.args.max_epochs
         device = self.args.device
-        save_checkpoint = self.args.save_checkpoint_during_training
+        barebones = self.args.barebones
 
-        if save_checkpoint:
-            self.logger.warning("Saving checkpoints during training is enabled. "
-                                "This may slow down the training process depending on disk speeds.")
-            model_checkpoint_cv = None # Uses anomalib's default checkpoint callback which saves checkpoints every epoch
+
+        # Configure engine parameters based on barebones mode
+        if barebones:
+            self.logger.info("Barebones mode enabled: Disabling logging, progress bars, and checkpointing.")
+            common_params = {
+                "max_epochs": max_epochs,
+                "logger": False,
+                "enable_progress_bar": False,
+                "enable_model_summary": False,
+            }
+            model_checkpoint_callback = ModelCheckpoint(
+                save_top_k=0,
+            )
+            common_params["callbacks"] = [model_checkpoint_callback]
+
         else:
-            model_checkpoint_cv = ModelCheckpoint(save_top_k=0)  # Disable checkpoint saving
-        
-        callbacks = [model_checkpoint_cv] if model_checkpoint_cv is not None else []
-
+            self.logger.info("Standard mode: Checkpoint saving, Logging and progress tracking enabled.")
+            common_params = {
+                "max_epochs": max_epochs,
+            }
+            # no need to define ModelCheckpoint callback as anomlib engine does it by default
+                
         if device == "xpu":
             self.logger.info("Creating Engine with XPU Strategy and Accelerator.")
             return Engine(
                 strategy=SingleXPUStrategy(),
                 accelerator=XPUAccelerator(),
-                max_epochs=max_epochs,
-                callbacks=callbacks
+                **common_params
             )
         elif device == "cpu":
             self.logger.info("Creating Engine with CPU Accelerator.")
             return Engine(
-            accelerator="cpu",
-            max_epochs=max_epochs,
-            callbacks=callbacks
+                accelerator="cpu",
+                **common_params
             )
         elif device == "cuda":
-            # For cuda simply return default engine
-            self.logger.info("Creating Engine with default (CUDA)settings.")
-            return Engine(max_epochs=max_epochs, callbacks=callbacks)
+            self.logger.info("Creating Engine with default (CUDA) settings.")
+            return Engine(**common_params)
         else:
             raise ValueError(f"Unsupported device type: {device}. Supported devices are 'cpu', 'cuda', and 'xpu'.")
 
@@ -143,9 +148,13 @@ class AnomalibBenchmark():
         elif device == "xpu" and torch.xpu.is_available():
             torch.xpu.synchronize()
         elif device == "cpu":
-            pass  # CPU operations are synchronous by default
+            # not really needed for CPU but keeping for consistency
+            torch.cpu.synchronize()
         else:
-            self.logger.debug(f"No explicit synchronization needed for device '{device}'.")
+            # unsupported device or no synchronization needed
+            pass 
+
+        
           
 
     def run_single_run(
@@ -165,12 +174,10 @@ class AnomalibBenchmark():
         Returns:
             tuple: (training_time, testing_time, metrics)
         """
-        device = self.args.device
-        
-        training_time = self._measure_training_time(engine, model, datamodule, device)
+        training_time = self._measure_training_time(engine, model, datamodule)
         self.logger.info(f"Training completed in {training_time:.2f} seconds.")
 
-        testing_time, metrics = self._measure_testing_time(engine, model, datamodule, device)
+        testing_time, metrics = self._measure_testing_time(engine, model, datamodule)
         self.logger.info(f"Testing completed in {testing_time:.2f} seconds.")
         
         return training_time, testing_time, metrics
@@ -180,58 +187,23 @@ class AnomalibBenchmark():
         engine: Engine, 
         model: AnomalibModule, 
         datamodule: AnomalibDataModule, 
-        device: str
     ) -> float:
-        """Measure training time using device-specific timing mechanism."""
-        if device == "cuda":
-            train_start = torch.cuda.Event(enable_timing=True)
-            train_end = torch.cuda.Event(enable_timing=True)
-            train_start.record()
-            engine.fit(model=model, datamodule=datamodule)
-            train_end.record()
-            self._sync_torch()
-            return train_start.elapsed_time(train_end) / MS_TO_SEC_CONVERSION
-        elif device == "xpu":
-            train_start = torch.xpu.Event(enable_timing=True)
-            train_end = torch.xpu.Event(enable_timing=True)
-            train_start.record()
-            engine.fit(model=model, datamodule=datamodule)
-            train_end.record()
-            self._sync_torch()
-            return train_start.elapsed_time(train_end) / MS_TO_SEC_CONVERSION
-        else:  # CPU or fallback
-            train_start_time = time.perf_counter()
-            engine.fit(model=model, datamodule=datamodule)
-            return time.perf_counter() - train_start_time
+
+        train_start_time = time.perf_counter()
+        engine.fit(model=model, datamodule=datamodule)
+        self._sync_torch()
+        return time.perf_counter() - train_start_time
     
     def _measure_testing_time(
         self, 
         engine: Engine, 
         model: AnomalibModule, 
         datamodule: AnomalibDataModule, 
-        device: str
     ) -> tuple[float, dict]:
-        """Measure testing time using device-specific timing mechanism."""
-        if device == "cuda":
-            test_start = torch.cuda.Event(enable_timing=True)
-            test_end = torch.cuda.Event(enable_timing=True)
-            test_start.record()
-            metrics = engine.test(model=model, datamodule=datamodule)
-            test_end.record()
-            self._sync_torch()
-            return test_start.elapsed_time(test_end) / MS_TO_SEC_CONVERSION, metrics
-        elif device == "xpu":
-            test_start = torch.xpu.Event(enable_timing=True)
-            test_end = torch.xpu.Event(enable_timing=True)
-            test_start.record()
-            metrics = engine.test(model=model, datamodule=datamodule)
-            test_end.record()
-            self._sync_torch()
-            return test_start.elapsed_time(test_end) / MS_TO_SEC_CONVERSION, metrics
-        else:  # CPU or fallback
-            test_start_time = time.perf_counter()
-            metrics = engine.test(model=model, datamodule=datamodule)
-            return time.perf_counter() - test_start_time, metrics
+        test_start_time = time.perf_counter()
+        metrics = engine.test(model=model, datamodule=datamodule)
+        self._sync_torch()
+        return time.perf_counter() - test_start_time, metrics
     
         
     def run_benchmark(self) -> list[dict[str, Any]]:

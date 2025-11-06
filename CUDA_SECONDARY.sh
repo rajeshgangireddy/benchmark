@@ -60,7 +60,8 @@ for MODEL in "${MODELS[@]}"; do
         --num_runs "$NUM_RUNS" \
         --seed "$SEED" \
         --wait_time "$WAIT_TIME" \
-        --output_dir "$OUTPUT_DIR"
+        --output_dir "$OUTPUT_DIR" \
+        --barebones
     
     # Check if the command was successful
     if [ $? -eq 0 ]; then

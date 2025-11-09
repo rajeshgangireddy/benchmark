@@ -209,7 +209,7 @@ def run_benchmark_with_power_monitoring(benchmark_args: list):
     
     script_dir = Path(__file__).parent
     power_script = script_dir / "jetson_power_monitor.sh"
-    benchmark_script = script_dir / "benchmark_script.py"
+    benchmark_script = script_dir.parent / "benchmark_script.py"
     
     # Check scripts exist
     if not power_script.exists():
@@ -330,16 +330,19 @@ Examples:
     analyze_parser.add_argument('--output', type=Path, help='Save report to file')
     
     # Benchmark command
-    benchmark_parser = subparsers.add_parser('benchmark', help='Run benchmark with power monitoring')
-    benchmark_parser.add_argument('benchmark_args', nargs=argparse.REMAINDER, 
-                                   help='Arguments to pass to benchmark_script.py')
+    benchmark_parser = subparsers.add_parser('benchmark', help='Run benchmark with power monitoring',
+                                              add_help=False)
     
-    args = parser.parse_args()
+    # Parse known args to allow passing through benchmark arguments
+    args, unknown = parser.parse_known_args()
     
     if args.command == 'analyze':
+        # Re-parse with full analyze parser to get help and validation
+        args = parser.parse_args()
         analyze_power_log(args.csv_file, args.plot, args.output)
     elif args.command == 'benchmark':
-        run_benchmark_with_power_monitoring(args.benchmark_args)
+        # Pass all unknown arguments to benchmark
+        run_benchmark_with_power_monitoring(unknown)
     else:
         parser.print_help()
         sys.exit(1)

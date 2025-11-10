@@ -6,6 +6,5 @@ anomalib==2.2.0
 psutil>=5.8.0
 torch>=2.0.0
 
-# Optional dependencies for enhanced functionality
-# onnxruntime>=1.12.0  # Uncomment if ONNX Runtime benchmarking is needed
-# openvino>=2023.0.0   # Uncomment if OpenVINO benchmarking is needed
+# Data processing and Excel handling
+openpyxl>=3.0.0 

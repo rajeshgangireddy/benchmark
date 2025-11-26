@@ -10,9 +10,13 @@ Benchmarking script for Anomalib models across different hardware platforms (CPU
 - Anomalib 2.2.0
 - Additional dependencies in `requirements.txt`
 
-## Setup 
-For cuda and  xpu devices, the setup is straight forward (will be updated soon)
-For setting up on Jetson Orin, see : [JetsonOrin.md](setup/JetsonOrin.md)
+## Setup
+
+Choose the appropriate setup guide based on your hardware:
+
+- **CUDA (NVIDIA GPUs)**: [CUDA.md](setup/CUDA.md)
+- **Intel XPU (Intel GPUs)**: [IntelXPU.md](setup/IntelXPU.md)
+- **Jetson Orin**: [JetsonOrin.md](setup/JetsonOrin.md)
 
 ## Usage
 

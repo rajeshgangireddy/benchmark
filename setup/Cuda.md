@@ -53,7 +53,7 @@ pip install anomalib[vlm,clip]
 Install any additional dependencies required for benchmarking:
 
 ```bash
-pip install -r additonal_requirments.txt
+pip install -r additonal_requirements.txt
 ```
 
 ## Verification

@@ -1,10 +1,10 @@
 
 # Anomalib - the main library for anomaly detection
-anomalib==2.2.0
+anomalib[clip,vlm] # we used 2.9.0 
 
 # Hardware and system information
 psutil>=5.8.0
-torch>=2.0.0
+pandas 
 
 # Data processing and Excel handling
 openpyxl>=3.0.0 

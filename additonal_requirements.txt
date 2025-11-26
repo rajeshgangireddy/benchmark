@@ -1,6 +1,5 @@
 
-# Anomalib - the main library for anomaly detection
-anomalib[clip,vlm] # we used 2.9.0 
+# These are the additional python packages required. 
 
 # Hardware and system information
 psutil>=5.8.0

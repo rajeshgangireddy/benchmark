@@ -4,29 +4,42 @@
 # Usage: ./run_multiple_models.sh
 
 # Configuration
-DEVICE="xpu"
+DEVICE="cuda"
 CATEGORY="transistor"  # Change this to your desired category
 NUM_RUNS=5
 SEED=42
 WAIT_TIME=20
-OUTPUT_DIR="./BenchMark-V2-XPU"
+OUTPUT_DIR="./BenchMark-V2-CUDA-Barebones-884"
+BATCH_SIZE=8
+NUM_WORKERS=4
 
 # List of models to benchmark (add/remove models as needed)
 
 MODELS=(
-    "ReverseDistillation"
+    "Dfkde" # Fastest - only classification
+    "Dfm" # Fastest + accuracy
+    "Padim" # Fastest
+    "WinClip" # Clip based model
+    "Patchcore" # Most used
+    "Fre" # Balanced
+    "Stfpm"  # Student Teacher + Backup
+    "Fastflow" # Good accuracy
     "Cfa"
+    "Supersimplenet"
+    "Dinomaly" # New SOTA. 
+    "ReverseDistillation"
+    # "VlmAd" # Vision-language model based method
     "Cflow"
-    "Draem"
+    "Csflow"
     "Dsr"
     "Ganomaly"
-    "Supersimplenet"
-    "EfficientAd" # BatchSize 1 only - this will fail, repeat separately
     "Uflow"
     "UniNet"
 )
 
 
+    
+    
 # Function to log messages
 log_message() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
@@ -61,6 +74,9 @@ for MODEL in "${MODELS[@]}"; do
         --seed "$SEED" \
         --wait_time "$WAIT_TIME" \
         --output_dir "$OUTPUT_DIR" \
+        --train_batch_size "$BATCH_SIZE" \
+        --eval_batch_size "$BATCH_SIZE" \
+        --num_workers "$NUM_WORKERS" \
         --barebones
 
     

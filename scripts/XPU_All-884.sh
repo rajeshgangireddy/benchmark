@@ -16,26 +16,26 @@ NUM_WORKERS=4
 # List of models to benchmark (add/remove models as needed)
 
 MODELS=(
-    "Padim" # Fastest
-    "Dfm" # Fastest + accuracy
-    "Patchcore" # Most used
-    "Dinomaly" # New SOTA. 
-    "Fre" # Balanced
     "Dfkde" # Fastest - only classification
-    "Stfpm"  # Student Teacher + Backup
+    "Dfm" # Fastest + accuracy
+    "Padim" # Fastest
     "WinClip" # Clip based model
+    "Patchcore" # Most used
+    "Fre" # Balanced
+    "Stfpm"  # Student Teacher + Backup
     "Fastflow" # Good accuracy
-    "VlmAd" # Vision-language model based method
-    "Csflow"
-    "ReverseDistillation"
     "Cfa"
+    "Supersimplenet"
+    "Dinomaly" # New SOTA. 
+    "ReverseDistillation"
+    # "VlmAd" # Vision-language model based method
+    "Cflow"
+    "Csflow"
     "Dsr"
     "Ganomaly"
-    "Supersimplenet"
     "Uflow"
     "UniNet"
 )
-
 
     
     

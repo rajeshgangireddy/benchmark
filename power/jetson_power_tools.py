@@ -209,7 +209,7 @@ def run_benchmark_with_power_monitoring(benchmark_args: list):
     
     script_dir = Path(__file__).parent
     power_script = script_dir / "jetson_power_monitor.sh"
-    benchmark_script = script_dir.parent / "benchmark_script.py"
+    benchmark_script = script_dir.parent / "train_benchmark.py"
     
     # Check scripts exist
     if not power_script.exists():

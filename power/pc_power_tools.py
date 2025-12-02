@@ -222,7 +222,7 @@ def run_benchmark_with_power_monitoring(device: str, benchmark_args: list):
     
     script_dir = Path(__file__).parent
     power_script = script_dir / "pc_power_monitor.py"
-    benchmark_script = script_dir / "benchmark_script.py"
+    benchmark_script = script_dir.parent / "train_benchmark.py"
     
     # Check scripts exist
     if not power_script.exists():
@@ -355,7 +355,7 @@ Examples:
                                    choices=['cuda', 'xpu', 'cpu'],
                                    help='Device to monitor (cuda/xpu/cpu)')
     benchmark_parser.add_argument('benchmark_args', nargs=argparse.REMAINDER, 
-                                   help='Arguments to pass to benchmark_script.py')
+                                   help='Arguments to pass to train_benchmark.py')
     
     args = parser.parse_args()
     

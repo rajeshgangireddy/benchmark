@@ -44,9 +44,9 @@ log_message() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
-# Check if benchmark_script.py exists
-if [ ! -f "benchmark_script.py" ]; then
-    log_message "ERROR: benchmark_script.py not found in current directory"
+# Check if train_benchmark.py exists
+if [ ! -f "train_benchmark.py" ]; then
+    log_message "ERROR: train_benchmark.py not found in current directory"
     exit 1
 fi
 
@@ -65,7 +65,7 @@ for MODEL in "${MODELS[@]}"; do
     log_message "Starting benchmark for model: $MODEL"
     
     # Run the benchmark command
-    python benchmark_script.py \
+    python train_benchmark.py \
         --device "$DEVICE" \
         --model_name "$MODEL" \
         --category "$CATEGORY" \

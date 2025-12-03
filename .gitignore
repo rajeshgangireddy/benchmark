@@ -2,7 +2,8 @@
 # Benchmark Related Folders and Files
 benchmark_results/
 benchmark_logs/
-
+openvino_cache/
+*.blob 
 #Anomalib Related Folders and Files
 datasets/
 pre_trained/

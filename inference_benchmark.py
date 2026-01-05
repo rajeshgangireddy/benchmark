@@ -563,7 +563,7 @@ def main():
     # Load data (shared across all models)
     print("Loading dataset...")
     try:
-        data = MVTecAD(category=args.category, num_workers=0)
+        data = MVTecAD(category=args.category, num_workers=4)
         data.setup()
         print(f"Dataset loaded: {len(data.test_data)} test images\n")
     except Exception as e:

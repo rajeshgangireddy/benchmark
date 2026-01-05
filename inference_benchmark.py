@@ -206,8 +206,8 @@ def parse_args():
         "--device",
         type=str,
         default="cuda",
-        choices=["cuda", "cpu", "CPU", "GPU"],
-        help="Device to run inference on (cuda/cpu for Torch, CPU/GPU for OpenVINO)",
+        choices=["cuda", "cpu", "CPU", "GPU", "xpu", "XPU"],
+        help="Device to run inference on (cuda/cpu/xpu for Torch, CPU/GPU for OpenVINO)",
     )
     parser.add_argument(
         "--model",
@@ -518,7 +518,7 @@ def main():
 
     # Get system information
     device_lower = args.device.lower()
-    device_for_sysinfo = None if device_lower == "cpu" else "cuda" if device_lower in ["cuda", "gpu"] else device_lower
+    device_for_sysinfo = None if device_lower == "cpu" else "cuda" if device_lower in ["cuda", "gpu"] else "xpu" if device_lower == "xpu" else device_lower
     
     try:
         system_info = get_system_info(device=device_for_sysinfo)
@@ -564,7 +564,7 @@ def main():
         print(f"Error: Failed to load dataset: {e}")
         sys.exit(1)
 
-    # Map device names (Torch uses "cuda"/"cpu", OpenVINO uses "GPU"/"CPU")
+    # Map device names (Torch uses "cuda"/"cpu"/"xpu", OpenVINO uses "GPU"/"CPU")
     # Note: If OpenVINO GPU support is not available, it will fall back to CPU
     if device_lower == "cuda":
         torch_device, ov_device = "cuda", "CPU"  # Changed: Use CPU for OpenVINO since GPU drivers not available
@@ -574,6 +574,9 @@ def main():
     elif device_lower == "gpu":
         torch_device, ov_device = "cuda", "CPU"  # Changed: Fallback to CPU for OpenVINO
         print("Note: Using CUDA for PyTorch, CPU for OpenVINO (GPU drivers not detected)")
+    elif device_lower == "xpu":
+        torch_device, ov_device = "xpu", "GPU"
+        print("Note: Using XPU for PyTorch, GPU for OpenVINO (Intel GPU)")
     else:
         torch_device, ov_device = "cpu", "CPU"
 

@@ -35,7 +35,7 @@ import pandas as pd
 
 from anomalib.data import MVTecAD
 from anomalib.deploy import CompressionType, OpenVINOInferencer, TorchInferencer
-from anomalib.engine import Engine
+from anomalib.engine import Engine, SingleXPUStrategy, XPUAccelerator
 from anomalib.models import get_model
 from utils.system_info import get_system_info
 
@@ -610,7 +610,16 @@ def main():
             print(f"Initializing and training {model_name}...")
             try:
                 model = get_model(model_name)
-                engine = Engine(max_epochs=5)
+                # Configure engine based on device
+                if torch_device == "xpu":
+                    engine = Engine(
+                        max_epochs=5,
+                        strategy=SingleXPUStrategy(),
+                        accelerator=XPUAccelerator(),
+                    )
+                    print("Training on XPU (Intel GPU)")
+                else:
+                    engine = Engine(max_epochs=5)
                 engine.fit(datamodule=data, model=model)
                 engine.test(datamodule=data, model=model)
             except Exception as e:

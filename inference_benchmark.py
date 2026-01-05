@@ -269,6 +269,12 @@ def parse_args():
         default="./benchmark_results",
         help="Directory to save benchmark results (default: ./benchmark_results)",
     )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=5,
+        help="Number of training epochs (default: 5)",
+    )
     return parser.parse_args()
 
 
@@ -613,13 +619,13 @@ def main():
                 # Configure engine based on device
                 if torch_device == "xpu":
                     engine = Engine(
-                        max_epochs=5,
+                        max_epochs=args.epochs,
                         strategy=SingleXPUStrategy(),
                         accelerator=XPUAccelerator(),
                     )
                     print("Training on XPU (Intel GPU)")
                 else:
-                    engine = Engine(max_epochs=5)
+                    engine = Engine(max_epochs=args.epochs)
                 engine.fit(datamodule=data, model=model)
                 engine.test(datamodule=data, model=model)
             except Exception as e:

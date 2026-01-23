@@ -13,8 +13,8 @@ Excel Output Sheets:
     1. Metrics Guide: Detailed explanation of all statistics
     2. System Info: Hardware/software configuration
     3. Raw Results: All individual run data
-    4. Summary: Mean ± Std Dev aggregated results
-    5. Summary MLPerf: Filtered results (≥3 runs required)
+    4. Summary: Mean +/- Std Dev aggregated results
+    5. Summary MLPerf: Filtered results (>=3 runs required)
 
 Usage:
     python inference_benchmark.py --device cuda --model Padim --category bottle --num-runs 3 --num-inferences 100
@@ -38,6 +38,11 @@ from anomalib.deploy import CompressionType, OpenVINOInferencer, TorchInferencer
 from anomalib.engine import Engine, SingleXPUStrategy, XPUAccelerator
 from anomalib.models import get_model
 from utils.system_info import get_system_info
+from utils.statistics import (
+    summarise_inference_results, 
+    summarise_inference_results_mlperf,
+    flatten_system_info as _flatten_system_info,
+)
 
 # Expected Versions
 TORCH_VERSION = "2.9"
@@ -58,9 +63,9 @@ def check_versions(system_info: dict[str, Any]) -> dict[str, tuple[str, str]]:
     Returns:
         Dictionary mapping component names to (expected, actual) version tuples for mismatches
     """
-    current_torch_version = system_info.get("PyTorch Version", "Unknown")
-    current_python_version = system_info.get("Python Version", "Unknown")
-    current_anomalib_version = system_info.get("Anomalib Version", "Unknown")
+    current_torch_version = system_info.get("torch_version", "Unknown")
+    current_python_version = system_info.get("python_version", "Unknown")
+    current_anomalib_version = system_info.get("anomalib_version", "Unknown")
 
     mismatches = {}
     if current_torch_version != TORCH_VERSION:
@@ -71,130 +76,6 @@ def check_versions(system_info: dict[str, Any]) -> dict[str, tuple[str, str]]:
         mismatches["Anomalib Version"] = (ANOMALIB_VERSION, current_anomalib_version)
 
     return mismatches
-
-
-def _flatten_system_info(system_info: dict[str, Any]) -> dict[str, Any]:
-    """Flatten nested dictionaries in system_info for better Excel readability.
-    
-    Args:
-        system_info: Dictionary containing system information with potentially nested structures
-        
-    Returns:
-        Dictionary with flattened structure including section headers
-    """
-    flattened = {}
-    
-    for key, value in system_info.items():
-        if isinstance(value, dict):
-            flattened[key] = "--- Section Header ---"
-            for nested_key, nested_value in value.items():
-                flattened[f"{key}_{nested_key}"] = nested_value
-        else:
-            flattened[key] = value
-    
-    return flattened
-
-
-def summarise_inference_results(results: list[dict[str, Any]]) -> dict[str, Any]:
-    """Summarise inference benchmark results with statistics.
-    
-    Args:
-        results: List of benchmark results from each run
-        
-    Returns:
-        Dictionary with mean, stdev, and percentiles for all metrics (ordered by importance)
-    """
-    if not results:
-        return {}
-    
-    summarised = {}
-    num_runs = len(results)
-    
-    # Get all metric keys that are present in ALL results (excluding run_id and export_time)
-    # export_time is only in the first run, so handle it separately
-    all_keys = set(results[0].keys())
-    for result in results[1:]:
-        all_keys = all_keys.intersection(result.keys())
-    
-    metric_keys = [key for key in all_keys if key != "run_id"]
-    
-    # Define priority order for metrics (most important first)
-    priority_metrics = [
-        "fps",           # Throughput - most important
-        "avg_time",      # Latency - most important
-        "min_time",      # Best case latency
-        "max_time",      # Worst case latency
-        "p50_latency",   # Median latency
-        "p95_latency",   # 95th percentile
-        "p99_latency",   # 99th percentile
-        "total_time",    # Total benchmark time
-        "num_inferences" # Number of inferences
-    ]
-    
-    # Sort keys by priority (priority metrics first, then alphabetically)
-    def sort_key(key):
-        if key in priority_metrics:
-            return (0, priority_metrics.index(key))
-        return (1, key)
-    
-    sorted_keys = sorted(metric_keys, key=sort_key)
-    
-    # Calculate statistics in priority order
-    for key in sorted_keys:
-        values = [result[key] for result in results]
-        
-        # Most important: mean and std
-        summarised[f"mean_{key}"] = statistics.mean(values)
-        summarised[f"std_{key}"] = statistics.stdev(values) if num_runs > 1 else 0.0
-        
-        # Add percentiles for timing metrics (after mean and std)
-        if "time" in key.lower() or "fps" in key.lower():
-            if num_runs >= 2:
-                try:
-                    quantiles = statistics.quantiles(values, n=100)
-                    summarised[f"p50_{key}"] = quantiles[49]  # Median
-                    summarised[f"p95_{key}"] = quantiles[94]  # 95th percentile
-                    summarised[f"p99_{key}"] = quantiles[98]  # 99th percentile
-                except statistics.StatisticsError:
-                    # Not enough data for quantiles
-                    pass
-    
-    # Handle export_time separately (only present in first run) - add at the end
-    if "export_time" in results[0]:
-        summarised["export_time"] = results[0]["export_time"]
-    
-    return summarised
-
-
-def summarise_inference_results_mlperf(results: list[dict[str, Any]], num_runs: int) -> dict[str, Any]:
-    """Summarise inference results using MLPerf methodology (drop fastest and slowest).
-    
-    Args:
-        results: List of benchmark results from each run
-        num_runs: Total number of runs
-        
-    Returns:
-        Dictionary with summarised results after filtering
-        
-    Raises:
-        ValueError: If num_runs < 3
-    """
-    if num_runs < 3:
-        raise ValueError(f"MLPerf summary requires at least 3 runs, but only {num_runs} provided.")
-    
-    if len(results) < 3:
-        raise ValueError(f"MLPerf summary requires at least 3 completed runs, but only {len(results)} available.")
-
-    # Use avg_time as the key metric for filtering
-    avg_times = [result["avg_time"] for result in results]
-    
-    slowest_run_idx = avg_times.index(max(avg_times))
-    fastest_run_idx = avg_times.index(min(avg_times))
-
-    filtered_results = [result for idx, result in enumerate(results) 
-                        if idx not in (slowest_run_idx, fastest_run_idx)]
-    
-    return summarise_inference_results(filtered_results)
 
 
 def parse_args():

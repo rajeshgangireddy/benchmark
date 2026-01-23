@@ -119,17 +119,25 @@ def _parse_proc_cpuinfo() -> dict[str, Any]:
     return cpu_details
 
 
-def _get_software_info() -> dict[str, Any]:
-    """Get software library versions (anomalib, torch, etc)."""
+def _get_software_info(libraries: list[str] | None = None) -> dict[str, Any]:
+    """
+    Get software library versions dynamically.
+    
+    Args:
+        libraries: List of library names to check. If None, checks common ML libraries.
+    """
+    if libraries is None:
+        libraries = ["torch", "anomalib", "otx", "openvino", "lightning"]
+    
     software_info = {}
-    for lib in ["torch", "anomalib"]:
+    for lib in libraries:
         try:
             module = __import__(lib)
-            software_info[f"{lib}_version"] = module.__version__
+            software_info[f"{lib}_version"] = getattr(module, "__version__", "Unknown")
         except ImportError:
-            software_info[f"{lib}_version"] = "Not installed"
+            pass  # Skip libraries that aren't installed
         except Exception:
-            software_info[f"{lib}_version"] = "Unknown"
+            software_info[f"{lib}_version"] = "Error"
     return software_info        
 
 

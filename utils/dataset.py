@@ -42,7 +42,7 @@ def list_otx_models(task: str | None = None, pattern: str | None = None) -> list
     
     Args:
         task: OTX task type (e.g., "DETECTION", "MULTI_CLASS_CLS").
-        pattern: Optional glob pattern to filter models.
+        pattern: Optional glob pattern to filter models (not currently supported).
         
     Returns:
         List of model names.
@@ -51,8 +51,9 @@ def list_otx_models(task: str | None = None, pattern: str | None = None) -> list
         ImportError: If OTX is not installed.
     """
     try:
-        from otx.engine.utils.api import list_models
-        return list_models(task=task, pattern=pattern, print_table=False)
+        from otx.backend.native.cli.utils import list_models
+        # Note: pattern parameter is not supported by this OTX version
+        return list_models(task=task, print_table=False)
     except ImportError:
         raise ImportError("OTX is not installed. Install with: pip install otx")
 

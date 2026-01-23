@@ -12,7 +12,7 @@ Benchmarking scripts for Anomalib and OTX (OpenVINO Training Extensions) models 
 - Python 3.12+ (recommended)
 - PyTorch 2.9+
 - Anomalib 2.2.0 (for anomaly detection benchmarks)
-- OTX (for OTX benchmarks) - `pip install otx`
+- OTX (for OTX benchmarks) 
 
 ## Setup
 

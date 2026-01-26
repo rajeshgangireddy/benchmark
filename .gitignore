@@ -9,6 +9,8 @@ datasets/
 pre_trained/
 results/ 
 
+#OTX Related Folders and Files
+data
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

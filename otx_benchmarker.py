@@ -35,41 +35,56 @@ class OTXBenchmark(BaseBenchmark):
 
     def create_engine(self) -> Any:
         """Create OTX engine based on device and configuration."""
-        from otx.engine import Engine as OTXEngine
+        from otx.engine import create_engine
         
-        device = self.args.device
-        work_dir = Path(self.args.output_dir) / "otx_workspace"
+        # Create model configuration
+        model_config = self._create_model_config()
         
-        # Map device names to OTX DeviceType
+        # Create data configuration
+        data_config = self._create_data_config()
+        
+        # Map device names to OTX format
         device_map = {
             "cpu": "cpu",
-            "cuda": "gpu",
+            "cuda": "gpu", 
             "xpu": "xpu",
         }
-        otx_device = device_map.get(device, "auto")
+        otx_device = device_map.get(self.args.device, "auto")
         
         self.logger.info(f"Creating OTX Engine with device={otx_device}")
         
         # Build engine kwargs
         engine_kwargs = {
-            "work_dir": str(work_dir),
             "device": otx_device,
         }
         
-        # Use model name or recipe path
+        # Training configuration
+        if hasattr(self.args, 'max_epochs'):
+            engine_kwargs["max_epochs"] = self.args.max_epochs
+        
+        # Precision settings  
+        if hasattr(self.args, 'precision') and self.args.precision:
+            engine_kwargs["precision"] = self.args.precision
+            
+        return create_engine(model=model_config, data=data_config, **engine_kwargs)
+        
+    def _create_model_config(self) -> str:
+        """Create model configuration."""
         model_spec = self.args.model
+        
         if model_spec.endswith(('.yaml', '.yml')):
             # Recipe path provided
             self.logger.info(f"Using recipe: {model_spec}")
-            engine_kwargs["model"] = model_spec
+            return model_spec
         else:
-            # Model name provided - will be handled by AutoConfigurator in create_model
-            pass
-        
-        # Data configuration
-        engine_kwargs["data"] = self._get_data_root()
-        
-        return OTXEngine(**engine_kwargs)
+            # Model name - need to construct recipe path
+            # For now, use model name directly and let OTX resolve it
+            self.logger.info(f"Using model: {model_spec}")
+            return model_spec
+            
+    def _create_data_config(self) -> str:
+        """Create data configuration - return data root path."""
+        return self.args.data_root
 
     def _get_data_root(self) -> str:
         """Get data root path from args."""

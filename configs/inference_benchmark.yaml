@@ -1,0 +1,45 @@
+# OTX Inference Benchmark Configuration
+# Use this for inference/latency benchmarking with a trained checkpoint
+#
+# Usage:
+#   python otx_inference_benchmark.py --config configs/inference_benchmark.yaml
+
+name: inference_benchmark
+description: Inference latency and throughput benchmark
+
+framework: otx
+benchmark_type: inference
+
+# Leave task/model empty for inference (loaded from checkpoint)
+task: ""
+model: ""
+
+device:
+  type: cuda
+  cuda_visible_devices: "0"
+
+data:
+  root: ./data/flower_photos  # Dataset for inference
+  train_batch_size: 1         # Not used for inference
+  eval_batch_size: 1          # Not used for inference
+  num_workers: 4
+
+training:
+  max_epochs: 0  # Not used for inference
+  precision: null
+
+inference:
+  checkpoint: ""  # Required: path to .ckpt file (provide via CLI)
+  batch_size: 1
+  num_inferences: 100
+  extended_stats: true
+
+run:
+  num_runs: 5
+  seed: 42
+  wait_time: 10
+
+output:
+  directory: ./benchmark_results
+  export_detailed_metrics: false
+  workspace_dir: ../training_extensions/library/otx-workspace

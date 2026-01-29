@@ -1,0 +1,38 @@
+# OTX Training Benchmark - CPU Configuration
+# Settings for CPU-only benchmarking (no GPU required)
+#
+# Usage:
+#   python otx_train_benchmark.py --config configs/cpu_benchmark.yaml
+
+name: cpu_benchmark
+description: Benchmark configuration for CPU-only training
+
+framework: otx
+benchmark_type: training
+
+task: MULTI_CLASS_CLS
+model: efficientnet_b0
+
+device:
+  type: cpu
+  cuda_visible_devices: ""  # Not used for CPU
+
+data:
+  root: ./data/flower_photos
+  train_batch_size: 8   # Smaller batches for CPU
+  eval_batch_size: 8
+  num_workers: 2        # Fewer workers to avoid memory pressure
+
+training:
+  max_epochs: 5
+  precision: "32"  # Full precision for CPU (no mixed precision support)
+
+run:
+  num_runs: 2
+  seed: 42
+  wait_time: 10
+
+output:
+  directory: ./benchmark_results
+  export_detailed_metrics: true
+  workspace_dir: ../training_extensions/library/otx-workspace

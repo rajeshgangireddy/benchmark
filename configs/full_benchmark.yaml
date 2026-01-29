@@ -1,0 +1,43 @@
+# OTX Training Benchmark - Full Benchmark Configuration
+# Use this for production benchmarking with statistical significance
+#
+# Usage:
+#   python otx_train_benchmark.py --config configs/full_benchmark.yaml
+#
+# This config runs multiple iterations to compute:
+# - Mean and standard deviation across runs
+# - MLPerf-style summary (drops fastest/slowest runs)
+
+name: full_benchmark
+description: Production benchmark with multiple runs for statistical analysis
+
+framework: otx
+benchmark_type: training
+
+# Model - replace with your model/recipe
+task: MULTI_CLASS_CLS
+model: efficientnet_b0
+
+device:
+  type: cuda
+  cuda_visible_devices: "0"
+
+data:
+  root: ./data/flower_photos  # Update to your dataset path
+  train_batch_size: 32
+  eval_batch_size: 32
+  num_workers: 8
+
+training:
+  max_epochs: 20
+  precision: bf16-mixed  # Use mixed precision for faster training
+
+run:
+  num_runs: 5    # 5 runs for statistical significance
+  seed: 42
+  wait_time: 30  # 30 seconds between runs for GPU cooldown
+
+output:
+  directory: ./benchmark_results
+  export_detailed_metrics: true
+  workspace_dir: ../training_extensions/library/otx-workspace

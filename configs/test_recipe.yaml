@@ -1,0 +1,30 @@
+# Simple classification recipe for benchmark testing
+# Based on OTX efficientnet_b0 recipe with minimal epochs
+
+task: MULTI_CLASS_CLS
+
+model:
+  class_path: otx.algo.classification.efficientnet_b0.EfficientNetB0ForMulticlassCls
+  init_args:
+    label_info: 1000
+
+engine:
+  device: auto
+
+callback_monitor: val/accuracy
+
+overrides:
+  max_epochs: 2
+
+# Minimal data config for quick testing
+train_subset:
+  batch_size: 32
+  num_workers: 2
+
+val_subset:
+  batch_size: 32
+  num_workers: 2
+
+test_subset:
+  batch_size: 32
+  num_workers: 2

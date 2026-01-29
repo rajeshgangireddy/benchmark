@@ -7,3 +7,8 @@ pandas
 
 # Data processing and Excel handling
 openpyxl>=3.0.0 
+pyyaml>=5.4.0
+
+# Note: For OTX benchmarks with detailed metrics export, install with:
+# uv run --with pandas --with openpyxl --with pyyaml otx_train_benchmark.py [args]
+# Or use the wrapper: ./run_otx_benchmark.sh [args]

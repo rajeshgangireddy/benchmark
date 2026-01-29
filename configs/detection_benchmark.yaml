@@ -1,0 +1,39 @@
+# OTX Training Benchmark - Detection Task Configuration
+# Example configuration for object detection benchmarking
+#
+# Usage:
+#   python otx_train_benchmark.py --config configs/detection_benchmark.yaml
+
+name: detection_benchmark
+description: Object detection benchmark configuration
+
+framework: otx
+benchmark_type: training
+
+# Detection model - ATSS with MobileNetV2 backbone
+task: DETECTION
+model: atss_mobilenetv2
+
+device:
+  type: cuda
+  cuda_visible_devices: "0"
+
+data:
+  root: ./data/coco_subset  # Update to your detection dataset
+  train_batch_size: 8       # Detection typically uses smaller batches
+  eval_batch_size: 8
+  num_workers: 4
+
+training:
+  max_epochs: 15
+  precision: bf16-mixed
+
+run:
+  num_runs: 3
+  seed: 42
+  wait_time: 30
+
+output:
+  directory: ./benchmark_results
+  export_detailed_metrics: true
+  workspace_dir: ../training_extensions/library/otx-workspace

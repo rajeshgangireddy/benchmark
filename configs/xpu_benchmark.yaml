@@ -1,0 +1,38 @@
+# OTX Training Benchmark - Intel XPU Configuration
+# Optimized settings for Intel discrete GPUs (Arc, Data Center Max)
+#
+# Usage:
+#   python otx_train_benchmark.py --config configs/xpu_benchmark.yaml
+
+name: xpu_benchmark
+description: Benchmark configuration optimized for Intel XPU
+
+framework: otx
+benchmark_type: training
+
+task: MULTI_CLASS_CLS
+model: efficientnet_b0
+
+device:
+  type: xpu
+  cuda_visible_devices: "0"  # Not used for XPU
+
+data:
+  root: ./data/flower_photos
+  train_batch_size: 16
+  eval_batch_size: 16
+  num_workers: 4
+
+training:
+  max_epochs: 10
+  precision: bf16-mixed  # BF16 is well-supported on Intel XPU
+
+run:
+  num_runs: 3
+  seed: 42
+  wait_time: 20
+
+output:
+  directory: ./benchmark_results
+  export_detailed_metrics: true
+  workspace_dir: ../training_extensions/library/otx-workspace

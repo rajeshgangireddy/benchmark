@@ -3,6 +3,9 @@
 
 """
 Training benchmark script for Anomalib models.
+
+Usage:
+  python -m src.anomalib_train_benchmark --device cuda --model_name Padim --category bottle --num_runs 5
 """
 
 import argparse
@@ -16,9 +19,9 @@ from typing import Any
 
 import pandas as pd
 
-from anomalib_benchmarker import AnomalibBenchmark
-from utils.system_info import get_system_info
-from utils.statistics import summarise_results, summarise_results_mlperf, flatten_system_info
+from src.benchmarkers.anomalib import AnomalibBenchmark
+from src.utils.system_info import get_system_info
+from src.utils.statistics import summarise_results, summarise_results_mlperf, flatten_system_info
 
 # Expected versions for validation
 EXPECTED_VERSIONS = {

@@ -14,8 +14,8 @@ from anomalib.engine import Engine, SingleXPUStrategy, XPUAccelerator
 from anomalib.models import get_model, AnomalibModule
 from anomalib.callbacks import ModelCheckpoint
 
-from benchmarker_base import BaseBenchmark
-from utils.dataset import MVTEC_CATEGORIES
+from src.benchmarkers.base import BaseBenchmark
+from src.utils.dataset import MVTEC_CATEGORIES
 
 
 class AnomalibBenchmark(BaseBenchmark):

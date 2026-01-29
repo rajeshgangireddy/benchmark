@@ -1,0 +1,42 @@
+# OTX Training Benchmark - Quick Test Configuration
+# Use this for quick validation that everything works (1-2 minutes)
+#
+# Usage:
+#   python otx_train_benchmark.py --config configs/quick_test.yaml
+#
+# Override specific values:
+#   python otx_train_benchmark.py --config configs/quick_test.yaml --device cpu
+
+name: quick_test
+description: Quick validation benchmark with minimal epochs and runs
+
+framework: otx
+benchmark_type: training
+
+# Model - replace with your model/recipe
+task: MULTI_CLASS_CLS
+model: efficientnet_b0
+
+device:
+  type: cuda
+  cuda_visible_devices: "0"
+
+data:
+  root: ./data/flower_photos  # Update to your dataset path
+  train_batch_size: 16
+  eval_batch_size: 16
+  num_workers: 4
+
+training:
+  max_epochs: 2
+  precision: null  # Use framework default
+
+run:
+  num_runs: 1
+  seed: 42
+  wait_time: 5
+
+output:
+  directory: ./benchmark_results
+  export_detailed_metrics: true
+  workspace_dir: ../training_extensions/library/otx-workspace

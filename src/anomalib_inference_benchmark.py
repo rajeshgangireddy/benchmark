@@ -1,3 +1,6 @@
+# Copyright (C) 2025 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
 """Benchmark script for comparing Torch and OpenVINO inference performance.
 
 This script trains a model, exports it to Torch and multiple OpenVINO formats,
@@ -17,8 +20,8 @@ Excel Output Sheets:
     5. Summary MLPerf: Filtered results (>=3 runs required)
 
 Usage:
-    python inference_benchmark.py --device cuda --model Padim --category bottle --num-runs 3 --num-inferences 100
-    python inference_benchmark.py --device cpu --model Stfpm --category transistor --num-runs 5
+    python -m src.anomalib_inference_benchmark --device cuda --model Padim --category bottle --num-runs 3 --num-inferences 100
+    python -m src.anomalib_inference_benchmark --device cpu --model Stfpm --category transistor --num-runs 5
 """
 
 import argparse
@@ -37,18 +40,19 @@ from anomalib.data import MVTecAD
 from anomalib.deploy import CompressionType, OpenVINOInferencer, TorchInferencer
 from anomalib.engine import Engine, SingleXPUStrategy, XPUAccelerator
 from anomalib.models import get_model
-from utils.system_info import get_system_info
-from utils.statistics import (
+
+from src.utils.system_info import get_system_info
+from src.utils.statistics import (
     summarise_inference_results, 
     summarise_inference_results_mlperf,
-    flatten_system_info as _flatten_system_info,
+    flatten_system_info,
 )
 
 # Expected Versions
 TORCH_VERSION = "2.9"
 PYTHON_VERSION = "3.12.13"
 ANOMALIB_VERSION = "2.2.0"
-OPENVINO_VERSION = "2024.0"  # Adjust based on your environment
+OPENVINO_VERSION = "2024.0"
 
 os.environ["TRUST_REMOTE_CODE"] = "1"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -211,7 +215,7 @@ def save_results_to_excel(all_models_results, system_info, config, output_path):
         metrics_df = pd.DataFrame(metrics_doc[1:], columns=metrics_doc[0])
         
         # Flatten system info for better Excel readability
-        flattened_system_info = _flatten_system_info(system_info)
+        flattened_system_info = flatten_system_info(system_info)
         system_info_df = pd.DataFrame(list(flattened_system_info.items()), 
                                        columns=["Component", "Details"])
         

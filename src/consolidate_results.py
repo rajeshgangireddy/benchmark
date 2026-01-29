@@ -1,14 +1,29 @@
 #!/usr/bin/env python3
+# Copyright (C) 2025 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Script to consolidate benchmark results from multiple Excel files into a single file.
 
 This script reads benchmark results from Excel files in a directory, extracts data from
 "Summary" and "Summary MLPERF" sheets, adds model name and source columns, and creates
 a consolidated Excel file with all results.
+
+Usage:
+  # Use default directory (benchmark_results) and output file
+  python -m src.consolidate_results
+  
+  # Specify custom input directory
+  python -m src.consolidate_results --input-dir /path/to/results
+  
+  # Specify custom output file
+  python -m src.consolidate_results --output consolidated_benchmark_results.xlsx
+  
+  # Use a specific file pattern
+  python -m src.consolidate_results --pattern "BM_cuda_*.xlsx"
 """
 
 import argparse
-import re
 from pathlib import Path
 from typing import Optional
 
@@ -73,7 +88,7 @@ def read_sheet_with_model_info(
         df['Source'] = source_filename
         
         return df
-    except ValueError as e:
+    except ValueError:
         # Sheet doesn't exist
         print(f"  Warning: Sheet '{sheet_name}' not found in {file_path.name}")
         return None
@@ -161,19 +176,19 @@ def main():
         epilog="""
 Examples:
   # Use default directory (benchmark_results) and output file
-  python consolidate_results.py
+  python -m src.consolidate_results
   
   # Specify custom input directory
-  python consolidate_results.py --input-dir /path/to/results
+  python -m src.consolidate_results --input-dir /path/to/results
   
   # Specify custom output file
-  python consolidate_results.py --output consolidated_benchmark_results.xlsx
+  python -m src.consolidate_results --output consolidated_benchmark_results.xlsx
   
   # Specify both input directory and output file
-  python consolidate_results.py -i /path/to/results -o my_results.xlsx
+  python -m src.consolidate_results -i /path/to/results -o my_results.xlsx
   
   # Use a specific file pattern
-  python consolidate_results.py --pattern "BM_cuda_*.xlsx"
+  python -m src.consolidate_results --pattern "BM_cuda_*.xlsx"
         """
     )
     

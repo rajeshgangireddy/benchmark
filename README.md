@@ -74,11 +74,34 @@ python inference_benchmark.py --device cuda --model Padim Patchcore --num-infere
 
 Benchmarks OTX model training across classification, detection, and segmentation tasks.
 
+**Important**: Early stopping is **disabled** to ensure training runs for exact epoch count specified. This provides accurate and reproducible benchmarking results.
+
+#### Basic Usage
+
 ```bash
 # List available models for a task
 python otx_train_benchmark.py --list_models --task DETECTION
 
-# Benchmark a detection model
+# Benchmark with config file (RECOMMENDED for reproducibility)
+python otx_train_benchmark.py \
+    --device cuda \
+    --task MULTI_CLASS_CLS \
+    --model ../training_extensions/library/src/otx/recipe/classification/multi_class_cls/efficientnet_b0.yaml \
+    --data_root ./data/flowers \
+    --num_runs 5 \
+    --max_epochs 20
+
+# Benchmark with barebones mode (minimal overhead)
+python otx_train_benchmark.py \
+    --device cuda \
+    --task MULTI_CLASS_CLS \
+    --model ../training_extensions/library/src/otx/recipe/classification/multi_class_cls/efficientnet_b0.yaml \
+    --data_root ./data/flowers \
+    --num_runs 5 \
+    --max_epochs 20 \
+    --barebones
+
+# Benchmark with model name (quick testing)
 python otx_train_benchmark.py \
     --device cuda \
     --task DETECTION \
@@ -86,20 +109,6 @@ python otx_train_benchmark.py \
     --data_root ./data/coco \
     --num_runs 5 \
     --max_epochs 10
-
-# Benchmark a classification model
-python otx_train_benchmark.py \
-    --device xpu \
-    --task MULTI_CLASS_CLS \
-    --model efficientnet_b0 \
-    --data_root ./data/imagenet
-
-# Use a recipe file
-python otx_train_benchmark.py \
-    --device cuda \
-    --task DETECTION \
-    --model ./recipes/yolox.yaml \
-    --data_root ./data
 ```
 
 #### Key Arguments
@@ -108,12 +117,26 @@ python otx_train_benchmark.py \
 |----------|-------------|---------|
 | `--device` | cpu, cuda, xpu | cuda |
 | `--task` | OTX task type (see below) | required |
-| `--model` | Model name or recipe path | required |
+| `--model` | Model name OR config file path (YAML) | required |
 | `--data_root` | Dataset directory | required |
 | `--num_runs` | Number of runs | 5 |
-| `--max_epochs` | Training epochs | 10 |
+| `--max_epochs` | Training epochs (overrides config) | 10 |
 | `--precision` | 16, 32, bf16-mixed | framework default |
+| `--barebones` | Disable logging, progress bars, checkpointing for minimal overhead | false |
+| `--export_otx_metrics` | Export detailed training metrics to Excel | false |
 | `--list_models` | List models for task | - |
+
+**Note**: Config files (YAML recipes) are recommended for reproducibility across machines. Early stopping is disabled to ensure exact epoch count.
+
+**Barebones Mode**: Use `--barebones` to disable logging, progress bars, and checkpointing for minimal overhead during benchmarking. This provides more accurate timing measurements by eliminating I/O overhead from:
+- Checkpoint saving (no `.ckpt` files written)
+- Progress bar updates
+- TensorBoard/CSV logging
+
+**Important**: For metrics export functionality, install additional dependencies:
+```bash
+pip install pandas openpyxl pyyaml
+```
 
 #### Supported OTX Tasks
 
@@ -154,6 +177,8 @@ python otx_inference_benchmark.py \
 
 ## Output Format
 
+### Benchmark Summary Results
+
 All benchmarks save results as Excel files with multiple sheets:
 
 1. **System Info**: Hardware/software configuration
@@ -162,14 +187,41 @@ All benchmarks save results as Excel files with multiple sheets:
 4. **Summary**: Mean and standard deviation across runs
 5. **Summary MLPerf**: MLPerf-style summary (drops fastest/slowest, requires >=3 runs)
 
+### OTX Detailed Metrics (with --export_otx_metrics)
+
+When using `--export_otx_metrics`, an additional Excel file is created with per-epoch training details:
+
+1. **Summary**: Key metrics summary
+   - Best/Final validation accuracy
+   - Best/Final training loss
+   - Peak/Average GPU memory usage
+   - Average iteration time
+
+2. **Epoch_Metrics**: Per-epoch metrics
+   - Learning rates (lr-SGD, lr-SGD-momentum)
+   - GPU memory usage
+   - Training/validation loss
+   - Validation accuracy
+   - Data loading and iteration times
+
+3. **All_Metrics**: Complete raw metrics from OTX training
+4. **Hyperparameters**: Model and training configuration
+
+### Standalone Metrics Export
+
+OTX automatically saves detailed metrics to CSV files during training. You can process these manually if needed.
+
 ### Filename Patterns
 
 ```
 # Anomalib training
 BM_{device}_{model}_{category}_runs-{n}_seed-{s}_{timestamp}.xlsx
 
-# OTX training
+# OTX training benchmark summary
 OTX_BM_{device}_{task}_{model}_runs-{n}_seed-{s}_{timestamp}.xlsx
+
+# OTX detailed metrics (when --export_otx_metrics is used)
+otx_detailed_metrics_{timestamp}.xlsx
 
 # OTX inference
 OTX_INF_BM_{device}_{checkpoint}_runs-{n}_{timestamp}.xlsx

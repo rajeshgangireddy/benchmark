@@ -83,13 +83,16 @@ def _flatten_system_info(system_info: dict[str, Any]) -> dict[str, Any]:
 
 
 def summarise_inference_results(results: list[dict[str, Any]]) -> dict[str, Any]:
-    """Summarise inference benchmark results with statistics.
+    """Summarise inference benchmark results with mean and stdev across runs.
+    
+    FPS is computed as 1/mean(avg_time) rather than arithmetic mean of per-run FPS,
+    which would overweight faster runs.
     
     Args:
         results: List of benchmark results from each run
         
     Returns:
-        Dictionary with mean, stdev, and percentiles for all metrics (ordered by importance)
+        Dictionary with mean and stdev for all metrics
     """
     if not results:
         return {}
@@ -98,7 +101,6 @@ def summarise_inference_results(results: list[dict[str, Any]]) -> dict[str, Any]
     num_runs = len(results)
     
     # Get all metric keys that are present in ALL results (excluding run_id and export_time)
-    # export_time is only in the first run, so handle it separately
     all_keys = set(results[0].keys())
     for result in results[1:]:
         all_keys = all_keys.intersection(result.keys())
@@ -107,8 +109,8 @@ def summarise_inference_results(results: list[dict[str, Any]]) -> dict[str, Any]
     
     # Define priority order for metrics (most important first)
     priority_metrics = [
-        "fps",           # Throughput - most important
         "avg_time",      # Latency - most important
+        "fps",           # Throughput (derived from avg_time)
         "min_time",      # Best case latency
         "max_time",      # Worst case latency
         "p50_latency",   # Median latency
@@ -126,27 +128,19 @@ def summarise_inference_results(results: list[dict[str, Any]]) -> dict[str, Any]
     
     sorted_keys = sorted(metric_keys, key=sort_key)
     
-    # Calculate statistics in priority order
+    # Calculate mean and stdev for each metric
     for key in sorted_keys:
         values = [result[key] for result in results]
-        
-        # Most important: mean and std
         summarised[f"mean_{key}"] = statistics.mean(values)
         summarised[f"std_{key}"] = statistics.stdev(values) if num_runs > 1 else 0.0
-        
-        # Add percentiles for timing metrics (after mean and std)
-        if "time" in key.lower() or "fps" in key.lower():
-            if num_runs >= 2:
-                try:
-                    quantiles = statistics.quantiles(values, n=100)
-                    summarised[f"p50_{key}"] = quantiles[49]  # Median
-                    summarised[f"p95_{key}"] = quantiles[94]  # 95th percentile
-                    summarised[f"p99_{key}"] = quantiles[98]  # 99th percentile
-                except statistics.StatisticsError:
-                    # Not enough data for quantiles
-                    pass
     
-    # Handle export_time separately (only present in first run) - add at the end
+    # Override FPS: compute from 1/mean(avg_time) for correctness
+    # Arithmetic mean of FPS overweights faster runs
+    mean_avg_time = summarised.get("mean_avg_time", 0)
+    if mean_avg_time > 0:
+        summarised["mean_fps"] = 1.0 / mean_avg_time
+    
+    # Handle export_time separately (only present in first run)
     if "export_time" in results[0]:
         summarised["export_time"] = results[0]["export_time"]
     
@@ -172,14 +166,12 @@ def summarise_inference_results_mlperf(results: list[dict[str, Any]], num_runs: 
     if len(results) < 3:
         raise ValueError(f"MLPerf summary requires at least 3 completed runs, but only {len(results)} available.")
 
-    # Use avg_time as the key metric for filtering
-    avg_times = [result["avg_time"] for result in results]
-    
-    slowest_run_idx = avg_times.index(max(avg_times))
-    fastest_run_idx = avg_times.index(min(avg_times))
-
-    filtered_results = [result for idx, result in enumerate(results) 
-                        if idx not in (slowest_run_idx, fastest_run_idx)]
+    # Sort runs by avg_time and drop the fastest and slowest
+    sorted_by_avg_time = sorted(enumerate(results), key=lambda x: x[1]["avg_time"])
+    # Drop first (fastest) and last (slowest) from sorted list
+    filtered_indices = {sorted_by_avg_time[0][0], sorted_by_avg_time[-1][0]}
+    filtered_results = [result for idx, result in enumerate(results)
+                        if idx not in filtered_indices]
     
     return summarise_inference_results(filtered_results)
 
@@ -227,12 +219,6 @@ def parse_args():
         type=int,
         default=10,
         help="Number of warmup iterations before benchmark (default: 10)",
-    )
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=1,
-        help="Batch size for inference (default: 1 for latency benchmarking)",
     )
     parser.add_argument(
         "--wait-time",
@@ -332,9 +318,6 @@ def save_results_to_excel(all_models_results, system_info, config, output_path):
             ["=== CROSS-RUN STATISTICS ===", "", ""],
             ["mean_{metric}", "Average of metric across all runs", "Σ(metric_values) / num_runs"],
             ["std_{metric}", "Standard deviation - measures consistency", "√(Σ(x - mean)² / n) - Lower is better!"],
-            ["p50_{metric}", "Median of metric across runs", "Middle value when runs are sorted"],
-            ["p95_{metric}", "95th percentile across runs", "95% of runs had this value or better"],
-            ["p99_{metric}", "99th percentile across runs", "99% of runs had this value or better"],
             ["", "", ""],
             ["=== MLPERF SUMMARY ===", "", ""],
             ["MLPerf Method", "Drops fastest and slowest runs", "More conservative, robust estimate (requires ≥3 runs)"],
@@ -463,25 +446,25 @@ def benchmark_inferencer(inferencer, data, num_inferences, inferencer_name, devi
     _sync_device(backend, device)
     print("Warmup complete. Starting benchmark...")
 
-    # Benchmark runs with proper synchronization
+    # Benchmark runs with proper synchronization using high-resolution timer
     for i in range(num_inferences):
         sample = data.test_data[i % len(data.test_data)]
 
         # Synchronize before timing to ensure previous operations are complete
         _sync_device(backend, device)
-        tic = time.time()
+        tic = time.perf_counter()
         
         result = inferencer.predict(sample.image)
         
         # Synchronize after inference to ensure operation is complete before stopping timer
         _sync_device(backend, device)
-        toc = time.time()
+        toc = time.perf_counter()
 
         inference_time = toc - tic
         timings.append(inference_time)
 
         if (i + 1) % 10 == 0 or i == 0:
-            print(f"  [{i + 1}/{num_inferences}] Inference time: {inference_time:.4f}s")
+            print(f"  [{i + 1}/{num_inferences}] Inference time: {inference_time:.6f}s")
 
     # Calculate statistics
     total_time = sum(timings)
@@ -490,18 +473,15 @@ def benchmark_inferencer(inferencer, data, num_inferences, inferencer_name, devi
     min_time = min(timings)
     max_time = max(timings)
     
-    # Calculate percentiles
+    # Calculate percentiles using statistics.quantiles for correct interpolation
     p50 = p95 = p99 = None
-    if len(timings) >= 2:
+    if num_inferences >= 2:
         try:
-            sorted_timings = sorted(timings)
-            p50_idx = int(len(timings) * 0.50)
-            p95_idx = int(len(timings) * 0.95)
-            p99_idx = int(len(timings) * 0.99)
-            p50 = sorted_timings[p50_idx]
-            p95 = sorted_timings[p95_idx]
-            p99 = sorted_timings[p99_idx]
-        except (IndexError, statistics.StatisticsError):
+            quantiles = statistics.quantiles(timings, n=100)
+            p50 = quantiles[49]   # 50th percentile (median)
+            p95 = quantiles[94]   # 95th percentile
+            p99 = quantiles[98]   # 99th percentile
+        except statistics.StatisticsError:
             pass
 
     results = {
@@ -520,13 +500,13 @@ def benchmark_inferencer(inferencer, data, num_inferences, inferencer_name, devi
 
     print(f"\n{inferencer_name} Results:")
     print(f"  Total time:        {total_time:.4f}s")
-    print(f"  Average time:      {avg_time:.4f}s")
-    print(f"  Min time:          {min_time:.4f}s")
-    print(f"  Max time:          {max_time:.4f}s")
+    print(f"  Average time:      {avg_time:.6f}s")
+    print(f"  Min time:          {min_time:.6f}s")
+    print(f"  Max time:          {max_time:.6f}s")
     if p50 is not None:
-        print(f"  P50 latency:       {p50:.4f}s")
-        print(f"  P95 latency:       {p95:.4f}s")
-        print(f"  P99 latency:       {p99:.4f}s")
+        print(f"  P50 latency:       {p50:.6f}s")
+        print(f"  P95 latency:       {p95:.6f}s")
+        print(f"  P99 latency:       {p99:.6f}s")
     print(f"  FPS:               {fps:.2f}")
 
     return results
@@ -550,9 +530,6 @@ def main():
     if args.num_runs < 3:
         print(f"Warning: num_runs={args.num_runs} is less than 3. MLPerf-style summary requires at least 3 runs.")
         print("MLPerf summary will be skipped in the results.")
-    
-    if args.batch_size > 1:
-        print(f"Note: Batch size = {args.batch_size}. Running in throughput mode (not latency mode).")
     
     # Convert single model to list if necessary
     models = args.model if isinstance(args.model, list) else [args.model]
@@ -599,7 +576,6 @@ def main():
     print(f"Number of runs:       {args.num_runs}")
     print(f"Inferences per run:   {args.num_inferences}")
     print(f"Warmup inferences:    {args.warmup_inferences}")
-    print(f"Batch size:           {args.batch_size}")
     print(f"Wait time (sec):      {args.wait_time}")
     print(f"Category:             {args.category}")
     if args.backend == "openvino":
@@ -783,7 +759,6 @@ def main():
         "num_runs": args.num_runs,
         "num_inferences": args.num_inferences,
         "warmup_inferences": args.warmup_inferences,
-        "batch_size": args.batch_size,
         "wait_time": args.wait_time,
         "test_images": len(data.test_data),
         "timestamp": timestamp,

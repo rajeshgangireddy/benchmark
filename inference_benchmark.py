@@ -1,8 +1,11 @@
-"""Benchmark script for comparing Torch and OpenVINO inference performance.
+"""Benchmark script for Torch or OpenVINO inference performance.
 
-This script trains a model, exports it to Torch and multiple OpenVINO formats,
-and benchmarks inference performance on all formats (PyTorch, OpenVINO FP32, FP16, INT8).
-Supports multiple benchmark runs for statistical analysis with mean, stdev, and percentiles.
+This script trains a model, exports it to the specified backend format,
+and benchmarks inference performance with statistical analysis.
+
+Supported Backends & Devices:
+    - Torch: cpu, cuda, xpu
+    - OpenVINO: cpu, xpu (Intel GPU), npu (Intel NPU)
 
 Statistics Calculated:
     - Per-run: avg_time, fps, min/max/p50/p95/p99 latency
@@ -17,8 +20,10 @@ Excel Output Sheets:
     5. Summary MLPerf: Filtered results (≥3 runs required)
 
 Usage:
-    python inference_benchmark.py --device cuda --model Padim --category bottle --num-runs 3 --num-inferences 100
-    python inference_benchmark.py --device cpu --model Stfpm --category transistor --num-runs 5
+    python inference_benchmark.py --backend torch --device cuda --model Padim --num-runs 3
+    python inference_benchmark.py --backend openvino --device cpu --model Stfpm --num-runs 5
+    python inference_benchmark.py --backend openvino --device xpu --model Padim  # Intel GPU
+    python inference_benchmark.py --backend openvino --device npu --model Padim  # Intel NPU
 """
 
 import argparse
@@ -32,6 +37,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import torch
 
 from anomalib.data import MVTecAD
 from anomalib.deploy import CompressionType, OpenVINOInferencer, TorchInferencer
@@ -39,38 +45,19 @@ from anomalib.engine import Engine, SingleXPUStrategy, XPUAccelerator
 from anomalib.models import get_model
 from utils.system_info import get_system_info
 
-# Expected Versions
-TORCH_VERSION = "2.9"
-PYTHON_VERSION = "3.12.13"
-ANOMALIB_VERSION = "2.2.0"
-OPENVINO_VERSION = "2024.0"  # Adjust based on your environment
+# Valid device/backend combinations
+TORCH_DEVICES = ["cpu", "cuda", "xpu"]
+OPENVINO_DEVICES = ["cpu", "xpu", "npu"]
+
+# OpenVINO device mapping (user-friendly -> OpenVINO internal)
+OPENVINO_DEVICE_MAP = {
+    "cpu": "CPU",
+    "xpu": "GPU",  # Intel GPU
+    "npu": "NPU",  # Intel NPU
+}
 
 os.environ["TRUST_REMOTE_CODE"] = "1"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
-
-def check_versions(system_info: dict[str, Any]) -> dict[str, tuple[str, str]]:
-    """Check if current versions match expected versions.
-    
-    Args:
-        system_info: Dictionary containing system information
-        
-    Returns:
-        Dictionary mapping component names to (expected, actual) version tuples for mismatches
-    """
-    current_torch_version = system_info.get("PyTorch Version", "Unknown")
-    current_python_version = system_info.get("Python Version", "Unknown")
-    current_anomalib_version = system_info.get("Anomalib Version", "Unknown")
-
-    mismatches = {}
-    if current_torch_version != TORCH_VERSION:
-        mismatches["PyTorch Version"] = (TORCH_VERSION, current_torch_version)
-    if current_python_version != PYTHON_VERSION:
-        mismatches["Python Version"] = (PYTHON_VERSION, current_python_version)
-    if current_anomalib_version != ANOMALIB_VERSION:
-        mismatches["Anomalib Version"] = (ANOMALIB_VERSION, current_anomalib_version)
-
-    return mismatches
 
 
 def _flatten_system_info(system_info: dict[str, Any]) -> dict[str, Any]:
@@ -200,14 +187,21 @@ def summarise_inference_results_mlperf(results: list[dict[str, Any]], num_runs: 
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Benchmark Torch vs OpenVINO inference performance with statistical analysis",
+        description="Benchmark Torch or OpenVINO inference performance with statistical analysis",
+    )
+    parser.add_argument(
+        "--backend",
+        type=str,
+        default="torch",
+        choices=["torch", "openvino"],
+        help="Inference backend to benchmark (default: torch)",
     )
     parser.add_argument(
         "--device",
         type=str,
         default="cuda",
-        choices=["cuda", "cpu", "CPU", "GPU", "xpu", "XPU"],
-        help="Device to run inference on (cuda/cpu/xpu for Torch, CPU/GPU for OpenVINO)",
+        choices=["cpu", "cuda", "xpu", "npu"],
+        help="Device to run inference on. Torch: cpu/cuda/xpu. OpenVINO: cpu/xpu/npu (default: cuda)",
     )
     parser.add_argument(
         "--model",
@@ -253,17 +247,6 @@ def parse_args():
         help="MVTec AD category to use (default: transistor)",
     )
     parser.add_argument(
-        "--skip-training",
-        action="store_true",
-        help="Skip training and use existing exported models",
-    )
-    parser.add_argument(
-        "--model-path",
-        type=str,
-        default=None,
-        help="Path to existing model directory (used with --skip-training)",
-    )
-    parser.add_argument(
         "--output-dir",
         type=str,
         default="./benchmark_results",
@@ -276,6 +259,50 @@ def parse_args():
         help="Number of training epochs (default: 5)",
     )
     return parser.parse_args()
+
+
+def validate_device_backend(device: str, backend: str) -> None:
+    """Validate that the device/backend combination is supported.
+    
+    Args:
+        device: Device to run inference on (cpu, cuda, xpu, npu)
+        backend: Inference backend (torch, openvino)
+        
+    Raises:
+        ValueError: If the device/backend combination is not supported
+    """
+    if backend == "torch":
+        if device not in TORCH_DEVICES:
+            raise ValueError(
+                f"Torch backend does not support device '{device}'. "
+                f"Valid devices: {', '.join(TORCH_DEVICES)}"
+            )
+    elif backend == "openvino":
+        if device not in OPENVINO_DEVICES:
+            raise ValueError(
+                f"OpenVINO backend does not support device '{device}'. "
+                f"Valid devices: {', '.join(OPENVINO_DEVICES)} "
+                f"(Note: CUDA is not supported by OpenVINO)"
+            )
+
+
+def _sync_device(backend: str, device: str) -> None:
+    """Synchronize device to ensure accurate timing measurements.
+    
+    For GPU/accelerator backends, operations are asynchronous. We must synchronize
+    before and after timing to get accurate measurements.
+    
+    Args:
+        backend: Inference backend (torch, openvino)
+        device: Device being used
+    """
+    if backend == "torch":
+        if device == "cuda" and torch.cuda.is_available():
+            torch.cuda.synchronize()
+        elif device == "xpu" and hasattr(torch, "xpu") and torch.xpu.is_available():
+            torch.xpu.synchronize()
+        # CPU doesn't need synchronization
+    # OpenVINO handles synchronization internally
 
 
 def save_results_to_excel(all_models_results, system_info, config, output_path):
@@ -401,8 +428,8 @@ def save_results_to_excel(all_models_results, system_info, config, output_path):
         raise RuntimeError(f"Failed to save results to Excel: {e}") from e
 
 
-def benchmark_inferencer(inferencer, data, num_inferences, inferencer_name, device, warmup_inferences=10):
-    """Run benchmark for a given inferencer.
+def benchmark_inferencer(inferencer, data, num_inferences, inferencer_name, device, backend, warmup_inferences=10):
+    """Run benchmark for a given inferencer with proper GPU synchronization.
 
     Args:
         inferencer: The inferencer instance (TorchInferencer or OpenVINOInferencer)
@@ -410,6 +437,7 @@ def benchmark_inferencer(inferencer, data, num_inferences, inferencer_name, devi
         num_inferences: Number of inferences to run
         inferencer_name: Name for logging (e.g., "TorchInferencer")
         device: Device being used
+        backend: Inference backend (torch or openvino)
         warmup_inferences: Number of warmup iterations (default: 10)
 
     Returns:
@@ -430,14 +458,23 @@ def benchmark_inferencer(inferencer, data, num_inferences, inferencer_name, devi
     for i in range(warmup_inferences):
         sample = data.test_data[i % len(data.test_data)]
         _ = inferencer.predict(sample.image)
+    
+    # Sync after warmup to ensure GPU is ready
+    _sync_device(backend, device)
     print("Warmup complete. Starting benchmark...")
 
-    # Benchmark runs
+    # Benchmark runs with proper synchronization
     for i in range(num_inferences):
         sample = data.test_data[i % len(data.test_data)]
 
+        # Synchronize before timing to ensure previous operations are complete
+        _sync_device(backend, device)
         tic = time.time()
+        
         result = inferencer.predict(sample.image)
+        
+        # Synchronize after inference to ensure operation is complete before stopping timer
+        _sync_device(backend, device)
         toc = time.time()
 
         inference_time = toc - tic
@@ -499,6 +536,13 @@ def main():
     """Main function to run the inference benchmark with robust error handling."""
     args = parse_args()
 
+    # Validate device/backend combination early
+    try:
+        validate_device_backend(args.device, args.backend)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
     # Validate arguments
     if args.num_inferences < 100:
         print(f"Warning: num_inferences={args.num_inferences} is less than 100. For reliable benchmarking, recommend >= 100.")
@@ -523,8 +567,15 @@ def main():
         sys.exit(1)
 
     # Get system information
-    device_lower = args.device.lower()
-    device_for_sysinfo = None if device_lower == "cpu" else "cuda" if device_lower in ["cuda", "gpu"] else "xpu" if device_lower == "xpu" else device_lower
+    # Map device for system info (cuda/xpu need GPU info, cpu doesn't)
+    if args.device == "cpu" or args.device == "npu":
+        device_for_sysinfo = None  # CPU-only info
+    elif args.device == "cuda":
+        device_for_sysinfo = "cuda"
+    elif args.device == "xpu":
+        device_for_sysinfo = "xpu"
+    else:
+        device_for_sysinfo = None
     
     try:
         system_info = get_system_info(device=device_for_sysinfo)
@@ -539,25 +590,20 @@ def main():
         print(f"{key}: {value}")
     print("=" * 60 + "\n")
     
-    # Check version mismatches
-    version_mismatches = check_versions(system_info)
-    if version_mismatches:
-        for component, (expected, current) in version_mismatches.items():
-            print(f"Warning: Version mismatch for {component}: Expected {expected}, got {current}")
-    
     print(f"\n{'=' * 60}")
     print("INFERENCE BENCHMARK CONFIGURATION")
     print(f"{'=' * 60}")
-    print(f"Models:               {', '.join(models)}")
+    print(f"Backend:              {args.backend}")
     print(f"Device:               {args.device}")
+    print(f"Models:               {', '.join(models)}")
     print(f"Number of runs:       {args.num_runs}")
     print(f"Inferences per run:   {args.num_inferences}")
     print(f"Warmup inferences:    {args.warmup_inferences}")
     print(f"Batch size:           {args.batch_size}")
     print(f"Wait time (sec):      {args.wait_time}")
     print(f"Category:             {args.category}")
-    print(f"Skip training:        {args.skip_training}")
-    print("Formats:              PyTorch, OpenVINO (FP32, FP16, INT8)")
+    if args.backend == "openvino":
+        print("Formats:              FP32, FP16, INT8")
     print(f"{'=' * 60}\n")
 
     # Load data (shared across all models)
@@ -570,21 +616,14 @@ def main():
         print(f"Error: Failed to load dataset: {e}")
         sys.exit(1)
 
-    # Map device names (Torch uses "cuda"/"cpu"/"xpu", OpenVINO uses "GPU"/"CPU")
-    # Note: If OpenVINO GPU support is not available, it will fall back to CPU
-    if device_lower == "cuda":
-        torch_device, ov_device = "cuda", "CPU"  # Changed: Use CPU for OpenVINO since GPU drivers not available
-        print("Note: Using CUDA for PyTorch, CPU for OpenVINO (GPU drivers not detected)")
-    elif device_lower == "cpu":
-        torch_device, ov_device = "cpu", "CPU"
-    elif device_lower == "gpu":
-        torch_device, ov_device = "cuda", "CPU"  # Changed: Fallback to CPU for OpenVINO
-        print("Note: Using CUDA for PyTorch, CPU for OpenVINO (GPU drivers not detected)")
-    elif device_lower == "xpu":
-        torch_device, ov_device = "xpu", "GPU"
-        print("Note: Using XPU for PyTorch, GPU for OpenVINO (Intel GPU)")
-    else:
-        torch_device, ov_device = "cpu", "CPU"
+    # Determine the device to use for inference
+    device = args.device
+    backend = args.backend
+    
+    # For OpenVINO, map user-friendly device names to OpenVINO internal names
+    if backend == "openvino":
+        ov_device = OPENVINO_DEVICE_MAP[device]
+        print(f"OpenVINO will use device: {ov_device}")
 
     # Dictionary to store all results: {model_name: {format_name: [run1_results, run2_results, ...]}}
     all_models_results = {}
@@ -598,57 +637,50 @@ def main():
         # Initialize results storage for this model
         all_models_results[model_name] = {}
 
-        # Get or train model and export to all formats
-        if args.skip_training and args.model_path:
-            print(f"Using existing models from: {args.model_path}")
-            torch_path = Path(args.model_path) / f"{model_name}_model.pt"
-            ov_fp32_path = Path(args.model_path) / f"{model_name}_model.xml"
-            ov_fp16_path = Path(args.model_path) / f"{model_name}_model_fp16.xml"
-            ov_int8_path = Path(args.model_path) / f"{model_name}_model_int8_ptq.xml"
+        # Train and export model
+        print(f"Initializing and training {model_name}...")
+        try:
+            model = get_model(model_name)
+            # Configure engine based on device (for training, use XPU if available)
+            if device == "xpu":
+                engine = Engine(
+                    max_epochs=args.epochs,
+                    strategy=SingleXPUStrategy(),
+                    accelerator=XPUAccelerator(),
+                )
+                print("Training on XPU (Intel GPU)")
+            else:
+                engine = Engine(max_epochs=args.epochs)
+            engine.fit(datamodule=data, model=model)
+            engine.test(datamodule=data, model=model)
+        except Exception as e:
+            print(f"Error training {model_name}: {e}")
+            traceback.print_exc()
+            continue
 
-            if not torch_path.exists() or not ov_fp32_path.exists():
-                print(f"Error: Required model files not found for {model_name}. Skipping.")
-                continue
-            
-            fp32_export_time = fp16_export_time = int8_export_time = None
-        else:
-            # Train and export model
-            print(f"Initializing and training {model_name}...")
-            try:
-                model = get_model(model_name)
-                # Configure engine based on device
-                if torch_device == "xpu":
-                    engine = Engine(
-                        max_epochs=args.epochs,
-                        strategy=SingleXPUStrategy(),
-                        accelerator=XPUAccelerator(),
-                    )
-                    print("Training on XPU (Intel GPU)")
-                else:
-                    engine = Engine(max_epochs=args.epochs)
-                engine.fit(datamodule=data, model=model)
-                engine.test(datamodule=data, model=model)
-            except Exception as e:
-                print(f"Error training {model_name}: {e}")
-                traceback.print_exc()
-                continue
-
-            # Export models
-            print(f"\nExporting {model_name} to all formats...")
-            filename = f"{model_name}_{args.category}_benchmark"
-
+        # Export model based on backend
+        print(f"\nExporting {model_name} for {backend} backend...")
+        filename = f"{model_name}_{args.category}_{backend}"
+        formats_to_benchmark = []
+        
+        if backend == "torch":
+            # Export PyTorch model only
             try:
                 torch_path = engine.export(model=model, export_type="torch", model_file_name=filename)
                 print(f"PyTorch model exported: {torch_path}")
+                formats_to_benchmark.append(("PyTorch", torch_path, TorchInferencer, device, None))
             except Exception as e:
                 print(f"Error exporting PyTorch model for {model_name}: {e}")
                 continue
-
+        
+        elif backend == "openvino":
+            # Export OpenVINO models (FP32, FP16, INT8)
             try:
                 fp32_start = time.time()
                 ov_fp32_path = engine.export(model=model, export_type="openvino", model_file_name=filename)
                 fp32_export_time = time.time() - fp32_start
                 print(f"OpenVINO FP32 exported: {ov_fp32_path} ({fp32_export_time:.2f}s)")
+                formats_to_benchmark.append(("OpenVINO (FP32)", ov_fp32_path, OpenVINOInferencer, ov_device, fp32_export_time))
             except Exception as e:
                 print(f"Error exporting OpenVINO FP32 for {model_name}: {e}")
                 continue
@@ -662,10 +694,9 @@ def main():
                 )
                 fp16_export_time = time.time() - fp16_start
                 print(f"OpenVINO FP16 exported: {ov_fp16_path} ({fp16_export_time:.2f}s)")
+                formats_to_benchmark.append(("OpenVINO (FP16)", ov_fp16_path, OpenVINOInferencer, ov_device, fp16_export_time))
             except Exception as e:
                 print(f"Warning: FP16 export failed for {model_name}: {e}")
-                ov_fp16_path = None
-                fp16_export_time = None
 
             try:
                 int8_start = time.time()
@@ -677,20 +708,12 @@ def main():
                 )
                 int8_export_time = time.time() - int8_start
                 print(f"OpenVINO INT8 exported: {ov_int8_path} ({int8_export_time:.2f}s)")
+                formats_to_benchmark.append(("OpenVINO (INT8)", ov_int8_path, OpenVINOInferencer, ov_device, int8_export_time))
             except Exception as e:
                 print(f"Warning: INT8 export failed for {model_name}: {e}")
-                ov_int8_path = None
-                int8_export_time = None
 
         # Run multiple benchmark runs for each format
-        formats_to_benchmark = [
-            ("PyTorch", torch_path, TorchInferencer, torch_device, None),
-            ("OpenVINO (FP32)", ov_fp32_path, OpenVINOInferencer, ov_device, fp32_export_time),
-            ("OpenVINO (FP16)", ov_fp16_path, OpenVINOInferencer, ov_device, fp16_export_time),
-            ("OpenVINO (INT8)", ov_int8_path, OpenVINOInferencer, ov_device, int8_export_time),
-        ]
-
-        for format_name, model_path, inferencer_class, device, export_time in formats_to_benchmark:
+        for format_name, model_path, inferencer_class, infer_device, export_time in formats_to_benchmark:
             if model_path is None or not Path(model_path).exists():
                 print(f"\nSkipping {format_name} (model not available)")
                 continue
@@ -706,11 +729,11 @@ def main():
                 print(f"\n--- Run {run_idx + 1}/{args.num_runs} ---")
                 
                 try:
-                    inferencer = inferencer_class(path=model_path, device=device)
+                    inferencer = inferencer_class(path=model_path, device=infer_device)
                     run_results = benchmark_inferencer(
                         inferencer, data, args.num_inferences,
                         f"{model_name} {format_name}",
-                        device, args.warmup_inferences
+                        infer_device, backend, args.warmup_inferences
                     )
                     run_results["run_id"] = run_idx + 1
                     if export_time is not None and run_idx == 0:
@@ -749,13 +772,14 @@ def main():
 
     # Save results
     timestamp = time.strftime("%Y%m%d-%H%M%S")
-    filename = f"INF_BM_{args.device}_{'_'.join(models)}_runs-{args.num_runs}_{timestamp}.xlsx"
+    filename = f"INF_{backend}_{device}_{'_'.join(models)}_runs-{args.num_runs}_{timestamp}.xlsx"
     result_path = output_dir / filename
 
     config = {
+        "backend": backend,
+        "device": device,
         "models": models,
         "category": args.category,
-        "device": f"Torch={torch_device.upper()}, OpenVINO={ov_device}",
         "num_runs": args.num_runs,
         "num_inferences": args.num_inferences,
         "warmup_inferences": args.warmup_inferences,
